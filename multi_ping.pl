@@ -2,7 +2,8 @@
 use strict;
 use POSIX ":sys_wait_h";
 my @server = ('localhost', 'localhost', 'localhost');
-$SIG{CHLD} =\&kiddo;
+$SIG{ALRM} = sub { die "Child may hang! \n"};
+my @kid_pid_list;
 foreach (@server){
     my $kid_pid;
     if($kid_pid = fork()){
@@ -11,6 +12,7 @@ foreach (@server){
     }
     die "Error: Failed to fork a child! \n" unless defined $kid_pid;
     # Child process
+    push $$, @kid_pid_list;
     my $result = `ping -c 10 $_`;
     if ($result =~ /0\%/) {
         print "PID=$$ ping successul.\n";
@@ -20,12 +22,15 @@ foreach (@server){
         exit 1;
     }
 }
-
-sub kiddo {
-    while ((my $kid = waitpid(-1, &WNOHANG)) > 0 ) {
-      print "PID=$kid killed! \n";
-      kill $kid;
-    }
-    print "SIGCHLD in PID $$- child reaped \n";
-    $SIG{CHLD} =\&kiddo;
+my $alarm_time = 5;
+eval {
+    foreach (@kid_pid_list) {
+        alarm $alarm_time;
+        waitpid($_, 0);
+        if($@ =~ /hang/) {
+            print "Will kill child process, PID=$_ \n";
+            `kill $_`;
+        }
+        $alarm_time = 0 if 0 != $alarm_time;
+    }    
 }
