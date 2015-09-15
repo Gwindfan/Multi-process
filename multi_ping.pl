@@ -1,8 +1,8 @@
 #!/usr/bin/perl -w
 use strict;
 use POSIX ":sys_wait_h";
-$SIG{ALRM} = 'IGNORE';
 my @server = ('localhost', 'localhost', 'localhost');
+$SIG{CHLD} =\&kiddo;
 foreach (@server){
     my $kid_pid;
     if($kid_pid = fork()){
@@ -11,7 +11,7 @@ foreach (@server){
     }
     die "Error: Failed to fork a child! \n" unless defined $kid_pid;
     # Child process
-    my $result = `ping -c 1 $_`;
+    my $result = `ping -c 10 $_`;
     if ($result =~ /0\%/) {
         print "PID=$$ ping successul.\n";
         exit 0;
@@ -19,4 +19,13 @@ foreach (@server){
         print "Error! \n";
         exit 1;
     }
+}
+
+sub kiddo {
+    while ((my $kid = waitpid(-1, &WNOHANG)) > 0 ) {
+      print "PID=$kid killed! \n";
+      kill $kid;
+    }
+    print "SIGCHLD in PID $$- child reaped \n";
+    $SIG{CHLD} =\&kiddo;
 }
